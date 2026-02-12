@@ -1,24 +1,49 @@
-# Teste Técnico - NestJS
+# Teste Técnico - Desenvolvedor
 
-## Objetivo
-Criar uma API REST em NestJS que alterne aleatoriamente entre duas APIs de CEP (ViaCEP e BrasilAPI) e retorne os dados em um formato padronizado.
+## O problema
 
-## APIs a serem utilizadas
+Você precisa criar uma API que consulta CEP. Simples, certo?
+
+Só que: você não controla as APIs externas. Elas caem, demoram, retornam erro. Seu serviço precisa continuar funcionando.
+
+## APIs disponíveis
+
 - ViaCEP: `https://viacep.com.br/ws/{cep}/json/`
 - BrasilAPI: `https://brasilapi.com.br/api/cep/v1/{cep}`
 
 ## Requisitos
 
 ### Endpoint
-- GET `/cep/{cep}`
-- Deve alternar aleatoriamente entre as duas APIs
-- Em caso de falha em uma API, deve tentar a outra automaticamente
+`GET /cep/{cep}`
 
-### Contrato de Resposta
-- O candidato deve definir um contrato de resposta que unifique os dados das duas APIs
-- O contrato deve ser documentado e tipado usando TypeScript
+### Comportamento esperado
+- Alterna entre as duas APIs (pode ser aleatório ou round-robin)
+- Se uma falhar, tenta a outra automaticamente
+- Retorna um contrato único, independente de qual API respondeu
 
-## Pontos de Avaliação
-1. Funcionamento da aplicação
-2. Design Patterns utilizados
-3. Tratamento de erros
+### O que queremos ver
+
+1. **Abstração** — Como você isola os providers externos? Se amanhã adicionarmos uma terceira API, o que muda no código?
+
+2. **Resiliência** — O que acontece quando uma API demora 30 segundos? E quando as duas estão fora?
+
+3. **Observabilidade** — Se der erro em produção, como a gente descobre o que aconteceu?
+
+4. **Tratamento de erros** — Erros diferentes devem ter tratamentos diferentes. Timeout não é a mesma coisa que 404.
+
+## Stack
+
+NestJS + TypeScript. Fora isso, use o que fizer sentido.
+
+## O que não estamos avaliando
+
+- Frontend
+- Banco de dados
+- Deploy
+- Cobertura de testes de 100%
+
+## Como entregar
+
+Fork este repositório, implemente, e envie o link para [matheus.morett@monest.com.br](mailto:matheus.morett@monest.com.br) com o assunto **Teste Dev - Monest**.
+
+Se o repositório for privado, adicione `matheusmorett2` como colaborador.
