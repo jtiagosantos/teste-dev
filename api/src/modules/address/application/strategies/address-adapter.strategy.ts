@@ -10,6 +10,8 @@ import {
 } from '../../domain/adapters/address.adapter';
 import { AddressData } from '../../domain/entities/address.entity';
 import { AxiosError } from 'axios';
+import { LogExecution } from '@/shared/logging/decorators/log-execution.decorator';
+import { Logger, LogStatus } from '@/shared/logging/logger';
 
 interface AdapterError {
   adapterName: string;
@@ -21,8 +23,12 @@ interface AdapterError {
 export class AddressAdapterStrategy implements AddressAdapter {
   private currentIndex = 0;
 
-  constructor(private readonly adapters: AddressAdapter[]) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly adapters: AddressAdapter[],
+  ) {}
 
+  @LogExecution()
   async findAddress(input: findAddressInput): Promise<AddressData> {
     const errors: AdapterError[] = [];
 
@@ -31,7 +37,13 @@ export class AddressAdapterStrategy implements AddressAdapter {
       const adapterName = adapter.constructor.name;
 
       try {
-        console.log(`Trying adapter: ${adapterName}`);
+        this.logger.log({
+          message: `Attempting to fetch address using adapter: ${adapterName}`,
+          origin: this.constructor.name,
+          action: 'findAddress',
+          status: LogStatus.STARTED,
+          payload: { input },
+        });
 
         const result = await adapter.findAddress(input);
 
@@ -39,7 +51,20 @@ export class AddressAdapterStrategy implements AddressAdapter {
 
         return result;
       } catch (error) {
-        console.log(`Adapter ${adapter.constructor.name} failed:`, error);
+        this.logger.error({
+          message: `Failed to fetch address using adapter: ${adapterName}`,
+          origin: this.constructor.name,
+          action: 'findAddress',
+          status: LogStatus.FAILED,
+          payload: {
+            input,
+            error: {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            },
+          },
+        });
 
         errors.push({
           adapterName,

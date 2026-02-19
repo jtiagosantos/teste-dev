@@ -6,9 +6,11 @@ import { HttpModule } from '@nestjs/axios';
 import { AddressAdapter } from './domain/adapters/address.adapter';
 import { BrasilApiAdapter } from './infrastructure/http/adapters/brasilApi/brasilApi.adapter';
 import { AddressAdapterStrategy } from './application/strategies/address-adapter.strategy';
+import { Logger } from '@/shared/logging/logger';
+import { LoggingModule } from '@/shared/logging/logging.module';
 
 @Module({
-  imports: [HttpModule],
+  imports: [HttpModule, LoggingModule],
   controllers: [AddressController],
   providers: [
     AddressService,
@@ -16,10 +18,14 @@ import { AddressAdapterStrategy } from './application/strategies/address-adapter
     BrasilApiAdapter,
     {
       provide: AddressAdapter,
-      useFactory: (viaCep: ViaCepAdapter, brasilApi: BrasilApiAdapter) => {
-        return new AddressAdapterStrategy([viaCep, brasilApi]);
+      useFactory: (
+        logger: Logger,
+        viaCep: ViaCepAdapter,
+        brasilApi: BrasilApiAdapter,
+      ) => {
+        return new AddressAdapterStrategy(logger, [viaCep, brasilApi]);
       },
-      inject: [ViaCepAdapter, BrasilApiAdapter],
+      inject: [Logger, ViaCepAdapter, BrasilApiAdapter],
     },
   ],
 })
