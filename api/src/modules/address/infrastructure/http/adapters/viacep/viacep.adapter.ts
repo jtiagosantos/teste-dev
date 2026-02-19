@@ -7,13 +7,17 @@ import {
   AddressData,
 } from '@/modules/address/domain/entities/address.entity';
 import { HttpService } from '@nestjs/axios';
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { FindAddressResponse } from './interfaces/find-address-response.interface';
+import {
+  AddressNotFoundException,
+  InvalidZipCodeException,
+  AddressProviderTimeoutException,
+  AddressProviderUnavailableException,
+  RateLimitException,
+  NetworkErrorException,
+} from '@/modules/address/domain/exceptions/address.exceptions';
+import { AxiosError } from 'axios';
 
 @Injectable()
 export class ViaCepAdapter implements AddressAdapter {
@@ -33,9 +37,7 @@ export class ViaCepAdapter implements AddressAdapter {
       const data = response.data;
 
       if (data.erro) {
-        throw new NotFoundException(
-          `Address not found for the provided zip code: ${zipCode}`,
-        );
+        throw new AddressNotFoundException(zipCode);
       }
 
       const address = new Address({
@@ -48,20 +50,52 @@ export class ViaCepAdapter implements AddressAdapter {
 
       return address.toJSON();
     } catch (error) {
-      if (error.response?.status === 400) {
-        throw new BadRequestException(
-          `Invalid zip code format: ${input.zipCode}`,
-        );
-      }
+      const axiosError = error as AxiosError;
 
-      if (error.response?.status === 500) {
-        throw new ServiceUnavailableException(
-          `Failed to retrieve address data for the provided zip code: ${input.zipCode}`,
-        );
-      }
-
-      if (error instanceof NotFoundException) {
+      if (error instanceof AddressNotFoundException) {
         throw error;
+      }
+
+      if (axiosError.response?.status === 400) {
+        throw new InvalidZipCodeException(input.zipCode);
+      }
+
+      if (axiosError.response?.status === 429) {
+        throw new RateLimitException('ViaCEP', input.zipCode);
+      }
+
+      if (
+        axiosError.response?.status === 500 ||
+        axiosError.response?.status === 503
+      ) {
+        throw new AddressProviderUnavailableException(
+          'ViaCEP',
+          input.zipCode,
+          'Service returned an error',
+        );
+      }
+
+      if (
+        axiosError.code === 'ETIMEDOUT' ||
+        axiosError.code === 'ECONNABORTED'
+      ) {
+        throw new AddressProviderTimeoutException('ViaCEP', input.zipCode);
+      }
+
+      const networkErrorCodes = [
+        'ECONNREFUSED',
+        'ENOTFOUND',
+        'ECONNRESET',
+        'ENETUNREACH',
+        'EHOSTUNREACH',
+      ];
+
+      if (networkErrorCodes.includes(axiosError.code ?? '')) {
+        throw new NetworkErrorException(
+          'ViaCEP',
+          input.zipCode,
+          axiosError.code,
+        );
       }
 
       throw error;

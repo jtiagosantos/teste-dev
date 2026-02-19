@@ -1,9 +1,4 @@
-import {
-  BadGatewayException,
-  Injectable,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   AddressAdapter,
   findAddressInput,
@@ -12,6 +7,17 @@ import { AddressData } from '../../domain/entities/address.entity';
 import { AxiosError } from 'axios';
 import { LogExecution } from '@/shared/logging/decorators/log-execution.decorator';
 import { Logger, LogStatus } from '@/shared/logging/logger';
+import {
+  AddressNotFoundException,
+  AddressProviderTimeoutException,
+  AddressProviderUnavailableException,
+  RateLimitException,
+  NetworkErrorException,
+  AllProvidersFailedException,
+  AllProvidersTimeoutException,
+  AllProvidersUnavailableException,
+  AllProvidersRateLimitedException,
+} from '../../domain/exceptions/address.exceptions';
 
 interface AdapterError {
   adapterName: string;
@@ -87,77 +93,82 @@ export class AddressAdapterStrategy implements AddressAdapter {
     const allNotFound = errors.every((e) => this.isNotFoundError(e.error));
 
     if (allNotFound) {
-      throw new NotFoundException({
-        message: 'Address not found',
-        detail: `No provider could find address for zipCode: ${zipCode}`,
-        zipCode,
-      });
+      throw new AddressNotFoundException(zipCode);
     }
 
     const allTimeouts = errors.every((e) => this.isTimeoutError(e.error));
 
     if (allTimeouts) {
-      throw new ServiceUnavailableException({
-        message: 'All providers timed out',
-        detail: 'Services are slow or unavailable. Please try again later',
-        providers: errors.map((e) => e.adapterName),
+      throw new AllProvidersTimeoutException(
         zipCode,
-      });
+        errors.map((e) => e.adapterName),
+      );
     }
 
     const allNetworkErrors = errors.every((e) => this.isNetworkError(e.error));
 
     if (allNetworkErrors) {
-      throw new ServiceUnavailableException({
-        message: 'All providers are unreachable',
-        detail:
-          'Network connectivity issues. Please try again in a few moments',
-        providers: errors.map((e) => e.adapterName),
+      throw new AllProvidersUnavailableException(
         zipCode,
-      });
+        errors.map((e) => e.adapterName),
+      );
     }
 
     const allRateLimited = errors.every((e) => this.isRateLimitError(e.error));
 
     if (allRateLimited) {
-      throw new ServiceUnavailableException({
-        message: 'Rate limit exceeded on all providers',
-        detail: 'Too many requests. Please try again later',
-        providers: errors.map((e) => e.adapterName),
+      throw new AllProvidersRateLimitedException(
         zipCode,
-      });
+        errors.map((e) => e.adapterName),
+      );
     }
 
-    throw new BadGatewayException({
-      message: 'Unable to fetch address from any provider',
-      detail: 'Multiple different errors occurred',
-      errors: errors.map((e) => ({
+    throw new AllProvidersFailedException(
+      zipCode,
+      errors.map((e) => ({
         provider: e.adapterName,
         error: e.error.message,
         timestamp: e.timestamp,
       })),
-      zipCode,
-    });
-  }
-
-  private isNotFoundError(error: AxiosError): boolean {
-    return (
-      error.status === 404 ||
-      error.response?.status === 404 ||
-      error.message?.toLowerCase().includes('not found') ||
-      error.message?.toLowerCase().includes('cep não encontrado')
     );
   }
 
-  private isTimeoutError(error: AxiosError): boolean {
+  private isNotFoundError(error: any): boolean {
+    if (error instanceof AddressNotFoundException) {
+      return true;
+    }
+
+    const axiosError = error as AxiosError;
     return (
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'ECONNABORTED' ||
-      error.message?.toLowerCase().includes('timeout')
+      axiosError.status === 404 ||
+      axiosError.response?.status === 404 ||
+      axiosError.message?.toLowerCase().includes('not found') ||
+      axiosError.message?.toLowerCase().includes('cep não encontrado')
     );
   }
 
-  private isNetworkError(error: AxiosError): boolean {
+  private isTimeoutError(error: any): boolean {
+    if (error instanceof AddressProviderTimeoutException) {
+      return true;
+    }
+
+    const axiosError = error as AxiosError;
+    return (
+      axiosError.code === 'ETIMEDOUT' ||
+      axiosError.code === 'ECONNABORTED' ||
+      axiosError.message?.toLowerCase().includes('timeout')
+    );
+  }
+
+  private isNetworkError(error: any): boolean {
+    if (
+      error instanceof NetworkErrorException ||
+      error instanceof AddressProviderUnavailableException
+    ) {
+      return true;
+    }
+
+    const axiosError = error as AxiosError;
     const networkErrorCodes = [
       'ECONNREFUSED',
       'ENOTFOUND',
@@ -167,17 +178,22 @@ export class AddressAdapterStrategy implements AddressAdapter {
     ];
 
     return (
-      networkErrorCodes.includes(error.code ?? '') ||
-      error.message?.toLowerCase().includes('network')
+      networkErrorCodes.includes(axiosError.code ?? '') ||
+      axiosError.message?.toLowerCase().includes('network')
     );
   }
 
-  private isRateLimitError(error: AxiosError): boolean {
+  private isRateLimitError(error: any): boolean {
+    if (error instanceof RateLimitException) {
+      return true;
+    }
+
+    const axiosError = error as AxiosError;
     return (
-      error.status === 429 ||
-      error.response?.status === 429 ||
-      error.message?.toLowerCase().includes('rate limit') ||
-      error.message?.toLowerCase().includes('too many requests')
+      axiosError.status === 429 ||
+      axiosError.response?.status === 429 ||
+      axiosError.message?.toLowerCase().includes('rate limit') ||
+      axiosError.message?.toLowerCase().includes('too many requests')
     );
   }
 }
