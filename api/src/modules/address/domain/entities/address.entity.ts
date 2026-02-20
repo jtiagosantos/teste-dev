@@ -1,9 +1,35 @@
-export interface AddressData {
+import { ApiProperty } from '@nestjs/swagger';
+
+export class AddressData {
+  @ApiProperty({
+    description: 'ZIP code (CEP)',
+    example: '01310100',
+  })
   zipCode: string;
-  state: string;
-  city: string;
-  neighborhood: string;
+
+  @ApiProperty({
+    description: 'Street name',
+    example: 'Avenida Paulista',
+  })
   street: string;
+
+  @ApiProperty({
+    description: 'Neighborhood',
+    example: 'Bela Vista',
+  })
+  neighborhood: string;
+
+  @ApiProperty({
+    description: 'City',
+    example: 'São Paulo',
+  })
+  city: string;
+
+  @ApiProperty({
+    description: 'State abbreviation',
+    example: 'SP',
+  })
+  state: string;
 }
 
 export class Address {
